@@ -1,6 +1,6 @@
 # Ride The Bus OCR Bot
 
-An automated bot that plays the casino-style "Ride The Bus" card game using computer vision and OCR.
+An automated bot that plays the casino-style "Ride The Bus" card game in Schedule I using computer vision and OCR.
 
 Note: This bot only currently works on display 0 with a 1440p game and monitor.
 
