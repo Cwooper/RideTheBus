@@ -5,6 +5,7 @@ import os
 # Directory settings
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.join(BASE_DIR, "Pictures")
+NUMBER_TEMPLATE_DIR = os.path.join(BASE_DIR, "Numbers")
 
 # Tesseract settings
 TESSERACT_PATH = r"C:\Program Files\Tesseract-OCR\tesseract.exe"  # Update with your path

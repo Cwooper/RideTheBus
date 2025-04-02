@@ -46,8 +46,69 @@ def crop_suit_region(screen):
     x2, y2 = SUIT_BOTTOM_RIGHT
     return screen[y1:y2, x1:x2]
 
+def load_number_templates():
+    """Load number template images for fallback recognition"""
+    templates = {}
+    if os.path.exists(NUMBER_TEMPLATE_DIR):
+        for filename in os.listdir(NUMBER_TEMPLATE_DIR):
+            if filename.endswith('.png'):
+                number = filename.split('.')[0]  # Get number from filename (e.g., "2" from "2.png")
+                template_path = os.path.join(NUMBER_TEMPLATE_DIR, filename)
+                templates[number] = cv2.imread(template_path)
+                print(f"Loaded number template: {number}")
+    else:
+        print(f"Warning: Number template directory not found at {NUMBER_TEMPLATE_DIR}")
+    return templates
+
+def detect_number_with_template(ocr_region, number_templates):
+    """Use template matching to identify card numbers when OCR fails"""
+    # Convert to grayscale for template matching
+    gray = cv2.cvtColor(ocr_region, cv2.COLOR_BGR2GRAY)
+    
+    # Apply binary threshold as in OCR
+    _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
+    
+    best_match = None
+    best_score = -1
+    
+    for number, template in number_templates.items():
+        # Convert template to grayscale
+        template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+        # Apply same threshold to template
+        _, template_thresh = cv2.threshold(template_gray, 150, 255, cv2.THRESH_BINARY_INV)
+        
+        # Try different scales for better matching
+        for scale in [0.8, 0.9, 1.0, 1.1, 1.2]:
+            # Resize the template
+            width = int(template_thresh.shape[1] * scale)
+            height = int(template_thresh.shape[0] * scale)
+            
+            # Skip if the template is too large for the region
+            if width > thresh.shape[1] or height > thresh.shape[0]:
+                continue
+                
+            resized_template = cv2.resize(template_thresh, (width, height), interpolation=cv2.INTER_AREA)
+            
+            try:
+                # Template matching
+                result = cv2.matchTemplate(thresh, resized_template, cv2.TM_CCOEFF_NORMED)
+                _, max_val, _, _ = cv2.minMaxLoc(result)
+                
+                if max_val > best_score:
+                    best_score = max_val
+                    best_match = number
+            except Exception as e:
+                print(f"Error matching template for number {number} at scale {scale}: {str(e)}")
+    
+    # Check if match is confident enough
+    if best_score > 0.45:  # Adjust threshold as needed
+        print(f"Template matching found: {best_match} with score {best_score:.2f}")
+        return best_match
+    
+    return None
+
 def detect_card_value(screen):
-    """Extract the card value using OCR with exact coordinates"""
+    """Extract the card value using OCR with exact coordinates, with template fallback"""
     # Crop the OCR region
     ocr_region = crop_ocr_region(screen)
     
@@ -72,8 +133,15 @@ def detect_card_value(screen):
             if val in text:
                 return val
     
-    # Save debug images only on failure
-    save_debug_image(ocr_region, "ocr_fail_region")
+    # If OCR fails, attempt to use template matching as fallback
+    print(f"OCR failed with text: '{text}'. Attempting template matching...")
+    number_templates = load_number_templates()
+    template_match = detect_number_with_template(ocr_region, number_templates)
+    
+    if template_match:
+        return template_match
+    
+    # Save debug images only on complete failure
     save_debug_image(thresh, "ocr_fail_processed")
     
     print(f"Warning: Could not detect card value. OCR text: '{text}'")
